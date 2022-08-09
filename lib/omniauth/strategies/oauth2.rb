@@ -60,7 +60,10 @@ module OmniAuth
       end
 
       def authorize_params # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+        Rails.logger.info('___authorize_params____')
         options.authorize_params[:state] = SecureRandom.hex(24)
+
+        Rails.logger.info('options.authorize_params[:state]: ' + options.authorize_params[:state].inspect )
 
         if OmniAuth.config.test_mode
           @env ||= {}
@@ -73,6 +76,10 @@ module OmniAuth
 
         session["omniauth.pkce.verifier"] = options.pkce_verifier if options.pkce
         session["omniauth.state"] = params[:state]
+        session["state"] = params[:state]
+        session["aaa"] = 'aaa'
+
+        Rails.logger.info('session["omniauth.state"]: ' + session["omniauth.state"].inspect )
 
         params
       end
@@ -82,21 +89,41 @@ module OmniAuth
       end
 
       def callback_phase # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
+        Rails.logger.info('___callback_phase____')
+        Rails.logger.info('error_reason: ' + request.params["error_reason"].inspect )
+        Rails.logger.info('error: ' + request.params["error"].inspect )
+        Rails.logger.info('state: ' + request.params["state"].inspect )
+        Rails.logger.info('session.state: ' + session["state"].inspect )
+        Rails.logger.info('omniauth.state: ' + session["omniauth.state"].inspect )
+        Rails.logger.info('error_description: ' + request.params["error_description"].inspect )
+        Rails.logger.info('provider_ignores_state: ' + options.provider_ignores_state.inspect )
+        Rails.logger.info('aaa: ' + session['aaa'].inspect )
+
         error = request.params["error_reason"] || request.params["error"]
         if !options.provider_ignores_state && (request.params["state"].to_s.empty? || request.params["state"] != session.delete("omniauth.state"))
+          Rails.logger.error('state not valid')
           fail!(:csrf_detected, CallbackError.new(:csrf_detected, "CSRF detected"))
         elsif error
+          Rails.logger.error('error')
           fail!(error, CallbackError.new(request.params["error"], request.params["error_description"] || request.params["error_reason"], request.params["error_uri"]))
         else
+          Rails.logger.info('start build access token')
           self.access_token = build_access_token
           self.access_token = access_token.refresh! if access_token.expired?
+          Rails.logger.info('access_token: ' + self.access_token.inspect )
           super
         end
       rescue ::OAuth2::Error, CallbackError => e
+        Rails.logger.error(e.message)
+        Rails.logger.error(e.backtrace.join("\n"))
         fail!(:invalid_credentials, e)
       rescue ::Timeout::Error, ::Errno::ETIMEDOUT => e
+        Rails.logger.error(e.message)
+        Rails.logger.error(e.backtrace.join("\n"))
         fail!(:timeout, e)
       rescue ::SocketError => e
+        Rails.logger.error(e.message)
+        Rails.logger.error(e.backtrace.join("\n"))
         fail!(:failed_to_connect, e)
       end
 
